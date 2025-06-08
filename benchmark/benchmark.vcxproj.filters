@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="input test.cpp" />
+    <ClCompile Include="integrity.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="BluTransEntry\AegisHolderGuard.hpp">
+      <Filter>BluBooster</Filter>
+    </ClInclude>
+    <ClInclude Include="BluTransEntry\AegisPtrBaseHolder.hpp">
+      <Filter>BluBooster</Filter>
+    </ClInclude>
+    <ClInclude Include="BluTransEntry\AegisPtrBaseManager.hpp">
+      <Filter>BluBooster</Filter>
+    </ClInclude>
+    <ClInclude Include="BluTransEntry\BluBooster.hpp">
+      <Filter>BluBooster</Filter>
+    </ClInclude>
+    <ClInclude Include="BluTransEntry\BluBooster_Utils.hpp">
+      <Filter>BluBooster</Filter>
+    </ClInclude>
+    <ClInclude Include="BluTransEntry\CPU.hpp">
+      <Filter>BluBooster</Filter>
+    </ClInclude>
+    <ClInclude Include="BluTransEntry\CPU_Bits.hpp">
+      <Filter>BluBooster</Filter>
+    </ClInclude>
+    <ClInclude Include="BluTransEntry\CPU_Features.hpp">
+      <Filter>BluBooster</Filter>
+    </ClInclude>
+    <ClInclude Include="BluTransEntry\CPU_Sync.hpp">
+      <Filter>BluBooster</Filter>
+    </ClInclude>
+    <ClInclude Include="BluTransEntry\Macros.hpp">
+      <Filter>BluBooster</Filter>
+    </ClInclude>
+    <ClInclude Include="BluTransEntry\Memory.hpp">
+      <Filter>BluBooster</Filter>
+    </ClInclude>
+    <ClInclude Include="BluTransEntry\SharedObjects.hpp">
+      <Filter>BluBooster</Filter>
+    </ClInclude>
+    <ClInclude Include="BluTransEntry\SystemAllocator.hpp">
+      <Filter>BluBooster</Filter>
+    </ClInclude>
+    <ClInclude Include="Hazard.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="BluBooster">
+      <UniqueIdentifier>{5fea60c9-c981-4507-bf06-387d061d4506}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
