@@ -10,6 +10,22 @@
 namespace BluBooster::Concurrent::AegisPtr::Internal{
     template <size_t MAX_THREADS>
     struct alignas(64) AegisPtrBaseHolderFlags {
+
+        AegisPtrBaseHolderFlags():  bits {}{
+
+        }
+        AegisPtrBaseHolderFlags(const AegisPtrBaseHolderFlags&) = delete;
+        AegisPtrBaseHolderFlags& operator=(const AegisPtrBaseHolderFlags&) = delete;
+
+        AegisPtrBaseHolderFlags(AegisPtrBaseHolderFlags&& other) {
+            for (size_t i = 0; i < bits.size(); ++i)
+                bits[i].store(other.bits[i].load(std::memory_order_relaxed));
+        }
+        AegisPtrBaseHolderFlags& operator= (AegisPtrBaseHolderFlags&& other) {
+            for (size_t i = 0; i < bits.size(); ++i)
+                bits[i].store(other.bits[i].load(std::memory_order_relaxed));
+            return *this;
+        }
         #if defined(BLUBOOSTER_AEGISPTR_SAFE)
             using BitType = std::atomic<uint64_t>;
         #else
@@ -120,7 +136,7 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
         AegisPtrBaseHolder& operator=(AegisPtrBaseHolder<T,MAX_THREADS>&& other) = delete;
         
         ~AegisPtrBaseHolder() {
-            if(m_base.flags.CanDestroy())
+            if(m_base.ptr && m_base.flags.CanDestroy())
             {
                 BluBooster::Memory::SystemAllocator::Free(m_base.ptr);
                 m_base.ptr = nullptr;

@@ -13,10 +13,12 @@ std::atomic<int> destroy_count{ 0 };
 
 struct AegisData {
     int value;
-    AegisData(int v) : value(v) {}
+    AegisData(int v) : value(v) {
+        std::cout << "[CREATE] " << this << '\n';
+    }
     ~AegisData() {
         std::cout << "[DESTROY] " << this << '\n';
-        destroy_count.fetch_add(1, std::memory_order_relaxed);
+        destroy_count.fetch_add(1);
     }
 };
 
@@ -40,7 +42,9 @@ void run_integrity_test() {
 
     for (auto& t : threads) t.join();
 
-    // test 3: use-after-free (should crash in debug mode)
+    // test 3: double free -> covered implicitly by destroy_count
+    assert(destroy_count.load() == THREAD_COUNT);
+    // test 4: use-after-free (should crash in debug mode)
 #ifdef _DEBUG
     try {
         AegisData* dangling = nullptr;
@@ -56,18 +60,16 @@ void run_integrity_test() {
     }
 #endif
 
-    // test 4: double free -> covered implicitly by destroy_count
-    assert(destroy_count.load() == THREAD_COUNT);
 
-    //// test 5: check flag reset
-    //for (int i = 0; i < THREAD_COUNT; ++i) {
-    //    const auto& flags = holders[i].m_base.flags; // implement getter if needed
-    //    for (int j = 0; j < 16; ++j)
-    //    {
-    //        uint64_t bits = flags[i].load(std::memory_order::acquire);
-    //        assert(flags[i] == 0); // all flags cleared
-    //    }
-    //}
+    // test 5: check flag reset
+    for (int i = 0; i < THREAD_COUNT; ++i) {
+        const auto& flags = holders[i].m_base.flags.bits; // implement getter if needed
+        for (int j = 0; j < (THREAD_COUNT + 63) / 64; ++j)
+        {
+            uint64_t bits = flags[j].load(std::memory_order::acquire);
+            assert(flags[j] == 0); // all flags cleared
+        }
+    }
 
     std::cout << "[PASS] AegisPtr integrity test complete. All checks passed.\n";
 }
