@@ -37,6 +37,6 @@
  3. Guard로 AegisData* 접근
  4. p->value() 설정
 
-(Release, x64 Build 기준 1000회 실행. 실행 사양은 DxDiag.txt 참고해주시면 감사하겠습니다.ㅇ)
+(Release, x64 Build 기준 1000회 실행. 실행 사양은 DxDiag.txt 참고해주시면 감사하겠습니다.)
 folly::hazptr Average: 1126 us
 AegisPtr Average: 1051 us
