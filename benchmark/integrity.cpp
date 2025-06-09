@@ -50,15 +50,16 @@ void aegis_guard_shared_test(AegisPtrBaseHolder<SharedAegisData, THREAD_COUNT>& 
 }
 
 void run_shared_access_test() {
-    AegisPtrBaseHolder<SharedAegisData, THREAD_COUNT> shared_holder(999);
+    SharedAegisData* ptr = new SharedAegisData(999);
+    AegisPtrBaseHolder<SharedAegisData, THREAD_COUNT> shared_holder(ptr);
     std::vector<std::thread> threads;
 
     for (int i = 0; i < THREAD_COUNT; ++i)
         threads.emplace_back(aegis_guard_shared_test, std::ref(shared_holder), i);
 
     for (auto& t : threads) t.join();
+    std::cout << "shared access done." << '\n';
 
-    assert(shared_destroy_count.load() == 1); // shared °´Ã¼´Â ÇÑ ¹ø¸¸ ÆÄ±«µÅ¾ß ÇÔ
 
     for (int j = 0; j < (THREAD_COUNT + 63) / 64; ++j)
         assert(shared_holder.m_base.flags.bits[j].load() == 0);
@@ -71,7 +72,10 @@ void run_integrity_test() {
     std::vector<AegisPtrBaseHolder<AegisData, THREAD_COUNT>> holders;
 
     for (int i = 0; i < THREAD_COUNT; ++i)
-        holders.emplace_back(i * 100);
+    {
+        AegisData* data = new AegisData(i * 100);
+        holders.emplace_back(data);
+    }
 
     for (int i = 0; i < THREAD_COUNT; ++i)
         threads.emplace_back(aegis_guard_test, std::ref(holders[i]), i);
@@ -84,6 +88,7 @@ void run_integrity_test() {
     // test 4 : run shared access test
 
     run_shared_access_test();
+    assert(shared_destroy_count.load() == 1); // shared °´Ã¼´Â ÇÑ ¹ø¸¸ ÆÄ±«µÅ¾ß ÇÔ
 
     // test 5: check flag reset
     for (int i = 0; i < THREAD_COUNT; ++i) {

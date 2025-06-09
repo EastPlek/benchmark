@@ -121,10 +121,13 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
             m_base.ptr = nullptr;
         }
         AegisPtrBaseHolder(const T& _rawData) {
-            m_base.ptr = BluBooster::Alloc<T>(_rawData);
+            m_base.ptr = new T (_rawData);
         }
         AegisPtrBaseHolder(T&& _mvRawData) {
-            m_base.ptr = BluBooster::Alloc<T>(std::move(_mvRawData));
+            m_base.ptr = new T (std::move(_mvRawData));
+        }
+        AegisPtrBaseHolder(T* _rawPtr) {
+            m_base.ptr = _rawPtr;
         }
         AegisPtrBaseHolder(const AegisPtrBaseHolder<T, MAX_THREADS>& other) = delete;
         AegisPtrBaseHolder<T,MAX_THREADS>& operator= (const AegisPtrBaseHolder<T,MAX_THREADS>& other) = delete;
@@ -138,7 +141,7 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
         ~AegisPtrBaseHolder() {
             if(m_base.ptr && m_base.flags.CanDestroy())
             {
-                BluBooster::Memory::SystemAllocator::Free(m_base.ptr);
+                delete m_base.ptr;
                 m_base.ptr = nullptr;
             }
         }
