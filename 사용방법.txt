@@ -40,3 +40,6 @@
 (Release, x64 Build 기준 1000회 실행. 실행 사양은 DxDiag.txt 참고해주시면 감사하겠습니다.ㅇ)
 folly::hazptr Average: 1126 us
 AegisPtr Average: 1051 us
+
+[+ | 2025.06.09 21:11 추가]
+현재 bench코드에서 _CrtDumpMemoryLeaks()에서 릭이 발생한다고 보고 되는 현상이 있음. 그러나, 이는 folly 라이브러리의 문제로 확인됨. (folly 관련 라이브러리를 주석처리하고 AegisPtr만을 대상으로 주석처리를 하였을 때 아무것도 보고 되지 않음)

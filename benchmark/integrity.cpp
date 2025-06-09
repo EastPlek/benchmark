@@ -82,9 +82,6 @@ void run_integrity_test() {
 
     for (auto& t : threads) t.join();
 
-    // test 3: double free -> covered implicitly by destroy_count
-    assert(destroy_count.load() == THREAD_COUNT);
-
     // test 4 : run shared access test
 
     run_shared_access_test();
@@ -102,6 +99,8 @@ void run_integrity_test() {
 int main() {
     auto t1 = std::chrono::system_clock::now();
     run_integrity_test();
+    // test 3: double free -> covered implicitly by destroy_count
+    assert(destroy_count.load() == THREAD_COUNT);
     auto t2 = std::chrono::system_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
     std::cout << "[PASS] AegisPtr integrity test complete. All checks passed.\n" << "Elapsed Time :" << duration << "us\n";

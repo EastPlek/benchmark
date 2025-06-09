@@ -12,7 +12,6 @@ namespace BluBooster::Concurrent::AegisPtr::Internal {
         ~AegisHolderGuard() {
             std::atomic_thread_fence(std::memory_order_acquire);
             ref.m_base.flags.Unset(tid);
-            ref.~AegisPtrBaseHolder();
         }
         T* operator->() const {
             if(!hasProtected){
