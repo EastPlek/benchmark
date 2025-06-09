@@ -8,8 +8,9 @@
 
 using namespace BluBooster::Concurrent::AegisPtr::Internal;
 
-constexpr int THREAD_COUNT = 8;
+constexpr int THREAD_COUNT = 16;
 std::atomic<int> destroy_count{ 0 };
+std::atomic<int> shared_destroy_count{ 0 };
 
 struct AegisData {
     int value;
@@ -22,17 +23,52 @@ struct AegisData {
     }
 };
 
-void aegis_guard_test(AegisPtrBaseHolder<AegisData, 16>& holder, int tid) {
-    AegisHolderGuard<AegisData, 16> guard(holder, tid);
+struct SharedAegisData {
+    int value;
+    SharedAegisData(int v) : value(v) {
+        std::cout << "[SHARED CREATE] " << this << '\n';
+    }
+    ~SharedAegisData() {
+        std::cout << "[SHARED DELETE] " << this << '\n';
+        shared_destroy_count.fetch_add(1);
+    }
+};
+
+void aegis_guard_test(AegisPtrBaseHolder<AegisData, THREAD_COUNT>& holder, int tid) {
+    AegisHolderGuard<AegisData, THREAD_COUNT> guard(holder, tid);
     AegisData* p = guard.operator->();
     assert(p->value == tid * 100);
     // simulate some work
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
 }
 
+void aegis_guard_shared_test(AegisPtrBaseHolder<SharedAegisData, THREAD_COUNT>& shared_holder, int tid) {
+    AegisHolderGuard<SharedAegisData, THREAD_COUNT> guard(shared_holder, tid);
+    SharedAegisData* p = guard.operator->();
+    assert(p->value == 999);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+}
+
+void run_shared_access_test() {
+    AegisPtrBaseHolder<SharedAegisData, THREAD_COUNT> shared_holder(999);
+    std::vector<std::thread> threads;
+
+    for (int i = 0; i < THREAD_COUNT; ++i)
+        threads.emplace_back(aegis_guard_shared_test, std::ref(shared_holder), i);
+
+    for (auto& t : threads) t.join();
+
+    assert(shared_destroy_count.load() == 1); // shared °´Ã¼´Â ÇÑ ¹ø¸¸ ÆÄ±«µÅ¾ß ÇÔ
+
+    for (int j = 0; j < (THREAD_COUNT + 63) / 64; ++j)
+        assert(shared_holder.m_base.flags.bits[j].load() == 0);
+
+    std::cout << "[PASS] Shared AegisPtr multi-thread test passed.\n";
+}
+
 void run_integrity_test() {
     std::vector<std::thread> threads;
-    std::vector<AegisPtrBaseHolder<AegisData, 16>> holders;
+    std::vector<AegisPtrBaseHolder<AegisData, THREAD_COUNT>> holders;
 
     for (int i = 0; i < THREAD_COUNT; ++i)
         holders.emplace_back(i * 100);
@@ -44,37 +80,27 @@ void run_integrity_test() {
 
     // test 3: double free -> covered implicitly by destroy_count
     assert(destroy_count.load() == THREAD_COUNT);
-    // test 4: use-after-free (should crash in debug mode)
-#ifdef _DEBUG
-    try {
-        AegisData* dangling = nullptr;
-        {
-            AegisPtrBaseHolder<AegisData, 16> temp(999);
-            AegisHolderGuard<AegisData, 16> g(temp, 0);
-            dangling = g.operator->();
-        }
-        std::cout << "[USE-AFTER-FREE TEST] " << dangling->value << '\n'; // likely crash in debug
-    }
-    catch (...) {
-        std::cout << "[PASS] use-after-free triggered safely (caught)\n";
-    }
-#endif
 
+    // test 4 : run shared access test
+
+    run_shared_access_test();
 
     // test 5: check flag reset
     for (int i = 0; i < THREAD_COUNT; ++i) {
         const auto& flags = holders[i].m_base.flags.bits; // implement getter if needed
         for (int j = 0; j < (THREAD_COUNT + 63) / 64; ++j)
         {
-            uint64_t bits = flags[j].load(std::memory_order::acquire);
-            assert(flags[j] == 0); // all flags cleared
+            assert(flags[j].load(std::memory_order::acquire) == 0); // all flags cleared
         }
     }
-
-    std::cout << "[PASS] AegisPtr integrity test complete. All checks passed.\n";
 }
 int main() {
+    auto t1 = std::chrono::system_clock::now();
     run_integrity_test();
+    auto t2 = std::chrono::system_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+    std::cout << "[PASS] AegisPtr integrity test complete. All checks passed.\n" << "Elapsed Time :" << duration << "us\n";
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
     _CrtDumpMemoryLeaks();
     return 0;
 }

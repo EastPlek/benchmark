@@ -10,9 +10,6 @@
 #include <folly/synchronization/Hazptr.h>
 #include <folly/Memory.h>
 
-#include <cds/init.h>
-#include <cds/gc/hp.h>
-#include <cds/threading/model.h>
 #include <chrono>
 #include <iostream>
 #include "BluTransEntry/BluBooster.hpp"
@@ -20,7 +17,7 @@
 struct HazData : public folly::hazptr_obj_base<HazData> {
     int value;
     HazData(int v) : value(v) {}
-    ~HazData() { /*std::cout << "[folly] deleted by thread\n"; */ }
+    ~HazData() { std::cout << "[folly] deleted by thread\n"; }
 };
 
 void folly_worker(std::atomic<HazData*>* ptr, int tid) {
@@ -52,7 +49,7 @@ using BluBooster::Concurrent::AegisPtr::Internal::AegisHolderGuard;
 struct AegisData {
     int value;
     AegisData(int v) : value(v) {}
-    ~AegisData() { /*std::cout << "[Aegis] deleted by thread\n";*/ }
+    ~AegisData() { std::cout << "[Aegis] deleted by thread\n"; }
 };
 
 void aegis_worker(AegisPtrBaseHolder<AegisData, 16>&holder, int tid) {
@@ -78,7 +75,7 @@ void aegis_mt_test(int thread_count) {
 int main() {
     long long folly_duration{};
     long long aegis_duration{};
-    uint64_t test_count{ 1'000};
+    uint64_t test_count{ 10 };
     for(int i = 0; i < test_count; ++i) {
         const int thread_count = 8;
         if (i % 2 == 0) {

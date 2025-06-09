@@ -1,0 +1,42 @@
+[실험적 구조인 AegisPtrBenchmark 사용방법]
+
+[벤치마크에 필요한 필수 라이브러리 설치]
+1. folly 라이브러리를 vcpkg로 설치합니다. (벤치마크 비교용)
+[초기 셋팅]
+1. 솔루션 파일을 Visual Studio로 엽니다
+2. 솔루션 탐색기에 볼드체로 표시되어 있는 benchmark에 우클릭을 합니다
+3. 속성을 클릭하고 [링커] -> 일반으로 들어갑니다
+4. 추가 라이브러리 디렉터리에 vcpkg 경로\installed\x64-windows\lib;을 추가합니다.
+5. Release / Debug 빌드 모두에 적용합니다.
+[무결성 검사]
+1. 빌드 설정을 Debug로 변경합니다. (_CrtDumpMemoryLeaks() 로그 출력용)
+2. integrity.cpp를 빌드에 포함시킵니다. (integrity.cpp 우클릭 -> 속성 -> 일반 : 빌드에서 제외 | 아니오)
+3. input test.cpp를 빌드에서 제외시킵니다.
+4.빌드하면 무결성 검사가 실행 됩니다.
+[folly 벤치마크]
+1. 빌드 설정을 Release로 변경합니다. (
+2. integrity.cpp를 빌드에서 제외시키고 input test.cpp를 포함시킵니다.
+3. 빌드하면 벤치마크가 실행됩니다.
+
+[AegisPtr 무결성 검사 단계]
+1. AegisGuard 기능 검사 (여러 Holder가 멀티스레딩 환경에서 생성된 환경에서 여러 Holder를 성공적으로 Guard할 수 있는지 검사)
+2. double Free 검사 (각 Holder는 객체를 한 번만 삭제하는가?)
+3. 공유 자원 기능 검사 (한 holder를 여러 스레드의 Guard가 사용하는 상황)
+4. flag 기능 검사 (실제 모든 holder의 flag들이 0인지 검사)
+
+[벤치마크 프로그램]
+ [folly]
+ 1. thread_count 만큼의 std::atomic<HazData*> 생성
+ 2. 각 스레드가 folly::hazptr_holder 슬롯에 HazData*p를 등록
+ 3. 그 뒤 value를 복사 대입
+ 4. p->retire()를 실행
+ 5. folly::hazptr_cleanup()으로 retireList cleanup
+ [AegisPtr]
+ 1. holders가 i * 100를 들도록 생성
+ 2. Guard 생성
+ 3. Guard로 AegisData* 접근
+ 4. p->value() 설정
+
+(Release, x64 Build 기준 1000회 실행. 실행 사양은 DxDiag.txt 참고해주시면 감사하겠습니다.ㅇ)
+folly::hazptr Average: 1126 us
+AegisPtr Average: 1051 us
