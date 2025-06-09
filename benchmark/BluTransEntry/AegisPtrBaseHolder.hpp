@@ -139,13 +139,26 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
         AegisPtrBaseHolder& operator=(AegisPtrBaseHolder<T,MAX_THREADS>&& other) = delete;
         
         ~AegisPtrBaseHolder() {
-            if(m_base.ptr && m_base.flags.CanDestroy())
+            bool Deleted = isDeleted.load(std::memory_order_acquire);
+            if(!Deleted && m_base.flags.CanDestroy() && m_base.ptr)
             {
                 delete m_base.ptr;
                 m_base.ptr = nullptr;
             }
         }
+
+        bool try_delete() {
+            bool Deleted = isDeleted.load(std::memory_order_acquire);
+            if (!Deleted && m_base.flags.CanDestroy() && m_base.ptr) {
+                isDeleted.store(true, std::memory_order_release);
+                delete m_base.ptr;
+                m_base.ptr = nullptr;
+                return true;
+            }
+            return false;
+        }
         AegisPtrBaseHolderSlot<T,MAX_THREADS> m_base{};
+        std::atomic<bool> isDeleted{ false };
     };
 }
 

@@ -13,14 +13,18 @@ namespace BluBooster::Concurrent::AegisPtr::Internal {
             std::atomic_thread_fence(std::memory_order_acquire);
             ref.m_base.flags.Unset(tid);
         }
-        T* operator->() const {
-            if(!hasProtected){
+        T* use() const {
+            if(!hasProtected && ref.m_base.ptr){
                 std::atomic_thread_fence(std::memory_order_release);
                 ref.m_base.flags.Set(tid);
                 hasProtected = true;
                 return ref.m_base.ptr;
             }
             return ref.m_base.ptr;
+        }
+        void unuse() {
+            std::atomic_thread_fence(std::memory_order_acquire);
+            ref.m_base.flags.Unset(tid);
         }
         bool isUsing () const {
             return !ref.m_base.flags.CanDestroy(ref.m_base.flags);
