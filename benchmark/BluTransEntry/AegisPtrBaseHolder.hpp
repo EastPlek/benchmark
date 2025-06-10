@@ -23,11 +23,11 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
 
         AegisPtrBaseHolderFlags(AegisPtrBaseHolderFlags&& other) {
             for (size_t i = 0; i < bits.size(); ++i)
-                bits[i].store(other.bits[i].load(std::memory_order_relaxed));
+                bits[i].bit.store(other.bits[i].bit.load(std::memory_order_relaxed));
         }
         AegisPtrBaseHolderFlags& operator= (AegisPtrBaseHolderFlags&& other) {
             for (size_t i = 0; i < bits.size(); ++i)
-                bits[i].store(other.bits[i].load(std::memory_order_relaxed));
+                bits[i].bit.store(other.bits[i].bit.load(std::memory_order_relaxed));
             return *this;
         }
         using BitType = AegisBits;
@@ -87,6 +87,7 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
         AegisPtrBaseHolder(AegisPtrBaseHolder&& other) noexcept {
             assert(m_base.ptr == nullptr); // 이동 전 객체는 비어있어야
             m_base.ptr = std::exchange(other.m_base.ptr, nullptr); // 소유권 이전
+            isDisposable = other.isDisposable.load(std::memory_order_acquire);
             m_base.flags = std::move(other.m_base.flags);
         }
         AegisPtrBaseHolder& operator=(AegisPtrBaseHolder<T,MAX_THREADS>&& other) = delete;

@@ -64,12 +64,13 @@ static void BM_GuardGeneration(benchmark::State& state) {
 BENCHMARK(BM_GuardGeneration)->Threads(2)->Threads(4)->Threads(8)->Threads(16);
 
 static void BM_AegisPtr_MT(benchmark::State& state) {
-	static AegisPtrBaseHolder<AegisData, THREAD_COUNT> holder(new AegisData(123));
+	static AegisPtrBaseHolder<AegisData, THREAD_COUNT> holder(new AegisData(123),true);
 	int tid = state.thread_index();
 
 	for (auto _ : state) {
 		AegisHolderGuard<AegisData, THREAD_COUNT> guard(holder, tid);
 		benchmark::DoNotOptimize(guard.use());
+		holder.try_delete();
 	}
 }
 BENCHMARK(BM_AegisPtr_MT)->Threads(2)->Threads(4)->Threads(8)->Threads(16);
