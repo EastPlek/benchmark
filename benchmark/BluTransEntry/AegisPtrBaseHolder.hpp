@@ -8,6 +8,10 @@
 #include "Macros.hpp"
 
 namespace BluBooster::Concurrent::AegisPtr::Internal{
+    struct alignas(64) AegisBits {
+        std::atomic<uint8_t> bit;
+        char padding[63];
+    };
     template <size_t MAX_THREADS>
     struct alignas(64) AegisPtrBaseHolderFlags {
 
@@ -26,161 +30,42 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
                 bits[i].store(other.bits[i].load(std::memory_order_relaxed));
             return *this;
         }
-        #if defined(BLUBOOSTER_AEGISPTR_SAFE)
-            using BitType = std::atomic<uint64_t>;
-        #else
-            using BitType = uint64_t;
-        #endif
-        std::array<BitType,(MAX_THREADS + 63)/ 64> bits;
+        using BitType = AegisBits;
+        std::array<BitType,MAX_THREADS> bits;
         BLUBOOSTER_FORCE_INLINE void Set(size_t tid) {
-            #if defined (BLUBOOSTER_AEGISPTR_SAFE)
-            bits[tid / 64].fetch_or(1ULL << (tid % 64),std::memory_order_seq_cst);
-            #else
-            bits[tid / 64] |= (1ULL << (tid % 64));
-            BluBooster::CPU::Sync::write_mbarrier();
-            #endif
+            bits[tid].bit.store(1,std::memory_order_release);
         }
         BLUBOOSTER_FORCE_INLINE void Unset(size_t tid) {
-        #if defined (BLUBOOSTER_AEGISPTR_SAFE)
-            bits[tid / 64].fetch_and(~(1ULL << (tid % 64)),std::memory_order_seq_cst);
-        #else
-            BluBooster::CPU::Sync::read_mbarrier();
-            bits[tid / 64] &= ~(1ULL << (tid % 64));
-        #endif
+            bits[tid].bit.store(0, std::memory_order_release);
         }
         BLUBOOSTER_FORCE_INLINE bool CanDestroy() const {
-            size_t bits_size = bits.size();
-            size_t i = 0;
-            #if defined(BLUBOOSTER_AEGISPTR_SAFE)
-            std::array<uint64_t, (MAX_THREADS + 63) / 64> rawCopy;
-            for (size_t i = 0; i < rawCopy.size(); ++i)
-                rawCopy[i] = bits[i].load(std::memory_order_relaxed);
-            auto* rawBits = rawCopy.data();
-            #else
-            auto* rawBits = reinterpret_cast<const uint64_t*>(&bits[0]);
-            #endif
-            if constexpr(BluBooster::CPU::hasAVX512) {
-                if (BluBooster::cpuFeatures.hasAVX512F) {
-                    while(i + 8 <= bits_size){
-                        __m512i chunk = _mm512_loadu_si512(reinterpret_cast<const __m512i*>(&rawBits[i]));
-                        __mmask64 mask = _mm512_test_epi8_mask(chunk,_mm512_setzero_si512());
-                        if(mask != 0) return false;
-                        i += 8;
-                    }
-                }
-            }
-            if constexpr(BluBooster::CPU::hasAVX2) {
-                if(BluBooster::cpuFeatures.hasAVX2){
-                    while(i + 4 <= bits_size) {
-                        __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&rawBits[i]));
-                        __m256i cnt = _mm256_cmpeq_epi8(chunk,_mm256_setzero_si256());
-                        int mask = _mm256_movemask_epi8(cnt);
-                        if(mask != -1) return false;
-                        i += 4;
-                    }
-                }
-            }
-            if constexpr(BluBooster::CPU::hasSSE42) {
-                if(BluBooster::cpuFeatures.hasSSE42){
-                    while(i + 2 <= bits_size) {
-                        __m128i chunk = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&rawBits[i]));
-                        __m128i cmp = _mm_cmpeq_epi8(chunk,_mm_setzero_si128());
-                        int mask = _mm_movemask_epi8(cmp);
-                        if(mask != 0xFFFF) return false;
-                        i += 2;
-                    }
-                }
-            }
-            for(; i < bits.size(); ++i)
-                if(rawBits[i] != 0) return false;
+            for(int i = 0; i < bits.size(); ++i)
+                if(bits[i].bit.load(std::memory_order_acquire) != 0) return false;
             return true;
         }
     };
 
-    template < size_t MAX_THREADS>
-    struct alignas(64) AegisPtrBaseHolderFastFlags {
-
-        AegisPtrBaseHolderFastFlags() : bits{} {
-
-        }
-        AegisPtrBaseHolderFastFlags(const AegisPtrBaseHolderFastFlags&) = delete;
-        AegisPtrBaseHolderFastFlags& operator=(const AegisPtrBaseHolderFastFlags&) = delete;
-
-        AegisPtrBaseHolderFastFlags(AegisPtrBaseHolderFastFlags&& other) {
-            bits = std::move(other.bits);
-        }
-        AegisPtrBaseHolderFastFlags& operator= (AegisPtrBaseHolderFastFlags&& other) {
-            bits = std::move(other.bits);
-            return *this;
-        }
-        std::array<uint8_t,MAX_THREADS> bits;
-        BLUBOOSTER_FORCE_INLINE void Set(size_t tid) {
-            bits[tid] = 1;
-            std::atomic_thread_fence(std::memory_order_seq_cst);
-        }
-        BLUBOOSTER_FORCE_INLINE void Unset(size_t tid) {
-            std::atomic_thread_fence(std::memory_order_seq_cst);
-            bits[tid] = 0;
-        }
-        BLUBOOSTER_FORCE_INLINE bool CanDestroy() const {
-            size_t bits_size = bits.size();
-            size_t i = 0;
-            auto* rawBits = reinterpret_cast<const uint8_t*>(&bits[0]);
-            if (BluBooster::cpuFeatures.hasAVX512F) {
-                while (i + 64 <= bits_size) {
-                    __m512i chunk = _mm512_loadu_si512(reinterpret_cast<const __m512i*>(&rawBits[i]));
-                    __mmask64 mask = _mm512_test_epi8_mask(chunk, _mm512_setzero_si512());
-                    if (mask != 0) return false;
-                    i += 64;
-                }
-            }
-            if (BluBooster::cpuFeatures.hasAVX2) {
-                while (i + 32 <= bits_size) {
-                    __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&rawBits[i]));
-                    __m256i cnt = _mm256_cmpeq_epi8(chunk, _mm256_setzero_si256());
-                    int mask = _mm256_movemask_epi8(cnt);
-                    if (mask != -1) return false;
-                    i += 32;
-                }
-            }
-            if (BluBooster::cpuFeatures.hasSSE42) {
-                while (i + 16 <= bits_size) {
-                    __m128i chunk = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&rawBits[i]));
-                    __m128i cmp = _mm_cmpeq_epi8(chunk, _mm_setzero_si128());
-                    int mask = _mm_movemask_epi8(cmp);
-                    if (mask != 0xFFFF) return false;
-                    i += 16;
-                }
-            }
-            for (; i < bits.size(); ++i)
-                if (rawBits[i] != 0) return false;
-            return true;
-        }
-
-    };
-    template <typename T,size_t MAX_THREADS,bool FAST_POLICY>
+    
+    template <typename T,size_t MAX_THREADS>
     struct alignas(64) AegisPtrBaseHolderSlot{
         T* ptr{nullptr};
-        using SlotType = std::conditional_t<FAST_POLICY,
-            AegisPtrBaseHolderFastFlags<MAX_THREADS>,
-        AegisPtrBaseHolderFlags<MAX_THREADS>>;
-        SlotType flags;
+        AegisPtrBaseHolderFlags<MAX_THREADS>flags;
     };
 
-    template <typename T, size_t N,bool B>
+    template <typename T, size_t N>
     struct AegisPtrBaseHolder;
 
     template <typename U>
     struct is_aegis_ptr_base_holder : std::false_type{};
 
-    template <typename U,size_t N,bool B>
-    struct is_aegis_ptr_base_holder<AegisPtrBaseHolder<U,N,B>> : std::true_type{};
+    template <typename U,size_t N>
+    struct is_aegis_ptr_base_holder<AegisPtrBaseHolder<U,N>> : std::true_type{};
 
     template <typename U>
     inline constexpr bool is_aegis_ptr_base_holder_v = is_aegis_ptr_base_holder<std::remove_cv_t<U>>::value;
 
 
-    template <typename T,size_t MAX_THREADS = 16,bool FAST_POLICY = false>
+    template <typename T,size_t MAX_THREADS = 16>
     struct AegisPtrBaseHolder{
         static_assert(!is_aegis_ptr_base_holder_v<T>,"T must not be itself AegisPtrBaseHolder.");
         static_assert(MAX_THREADS % 8 == 0,"Threads Must be divided by 8. ");
@@ -197,14 +82,14 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
             m_base.ptr = _rawPtr;
             isDisposable.store(disposable, std::memory_order_release);
         }
-        AegisPtrBaseHolder(const AegisPtrBaseHolder<T, MAX_THREADS,FAST_POLICY>& other) = delete;
-        AegisPtrBaseHolder<T,MAX_THREADS>& operator= (const AegisPtrBaseHolder<T,MAX_THREADS,FAST_POLICY>& other) = delete;
+        AegisPtrBaseHolder(const AegisPtrBaseHolder<T, MAX_THREADS>& other) = delete;
+        AegisPtrBaseHolder<T,MAX_THREADS>& operator= (const AegisPtrBaseHolder<T,MAX_THREADS>& other) = delete;
         AegisPtrBaseHolder(AegisPtrBaseHolder&& other) noexcept {
             assert(m_base.ptr == nullptr); // 이동 전 객체는 비어있어야
             m_base.ptr = std::exchange(other.m_base.ptr, nullptr); // 소유권 이전
             m_base.flags = std::move(other.m_base.flags);
         }
-        AegisPtrBaseHolder& operator=(AegisPtrBaseHolder<T,MAX_THREADS,FAST_POLICY>&& other) = delete;
+        AegisPtrBaseHolder& operator=(AegisPtrBaseHolder<T,MAX_THREADS>&& other) = delete;
         ~AegisPtrBaseHolder() {
             if (isDisposable.load(std::memory_order_acquire) && !isDeleted.load(std::memory_order_acquire)
                 && m_base.flags.CanDestroy() && m_base.ptr) {
@@ -222,7 +107,7 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
             }
             return false;
         }
-        AegisPtrBaseHolderSlot<T, MAX_THREADS,FAST_POLICY> m_base{};
+        AegisPtrBaseHolderSlot<T, MAX_THREADS> m_base{};
         std::atomic<bool> isDeleted{ false };
         std::atomic<bool> isDisposable{ false };
     };

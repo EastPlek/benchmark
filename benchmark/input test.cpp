@@ -24,7 +24,7 @@ using BluBooster::Concurrent::AegisPtr::Internal::AegisHolderGuard;
 using BluBooster::Concurrent::AegisPtr::Internal::AegisPtrBaseHolder;
 using BluBooster::Concurrent::AegisPtr::Internal::AegisHolderGuard;
 
-constexpr int THREAD_COUNT = 64;
+constexpr int THREAD_COUNT = 1024;
 
 struct AegisData {
 	int v;
@@ -36,16 +36,32 @@ struct HazData : folly::hazptr_obj_base<HazData> {
 	HazData(int val) : v(val) {}
 };
 
-static void BM_SingleThreadAegisPtr(benchmark::State& state) {
-	using AegisHolder = AegisPtrBaseHolder<AegisData, THREAD_COUNT>;
-	AegisHolder holder(new AegisData(123));
 
-	for (auto _ : state) {
-		AegisHolderGuard<AegisData, THREAD_COUNT> guard(holder, 0); // tid = 0
-		AegisData* ptr = guard.use();
-		benchmark::DoNotOptimize(ptr);
-	}
+BluBooster::Concurrent::AegisPtr::Internal::AegisPtrBaseHolderFlags<16> flags;
+
+static void BM_Set(benchmark::State& state) {
+	AegisPtrBaseHolder<AegisData, 16> holder;
+	int tid = state.thread_index();
+	for (auto _ : state)
+		holder.m_base.flags.Set(tid); // 고정된 tid로 테스트
 }
+BENCHMARK(BM_Set)->Threads(2)->Threads(4)->Threads(8)->Threads(16);
+
+static void BM_Unset(benchmark::State& state) {
+	AegisPtrBaseHolder<AegisData, 16> holder;
+	int tid = state.thread_index();
+	for (auto _ : state)
+		holder.m_base.flags.Unset(tid);
+}
+BENCHMARK(BM_Unset)->Threads(2)->Threads(4)->Threads(8)->Threads(16);
+
+static void BM_GuardGeneration(benchmark::State& state) {
+	AegisPtrBaseHolder<AegisData, 16> holder;
+	int tid = state.thread_index();
+	for (auto _ : state)
+		AegisHolderGuard<AegisData, 16>(holder, tid);
+}
+BENCHMARK(BM_GuardGeneration)->Threads(2)->Threads(4)->Threads(8)->Threads(16);
 
 static void BM_AegisPtr_MT(benchmark::State& state) {
 	static AegisPtrBaseHolder<AegisData, THREAD_COUNT> holder(new AegisData(123));
@@ -54,26 +70,9 @@ static void BM_AegisPtr_MT(benchmark::State& state) {
 	for (auto _ : state) {
 		AegisHolderGuard<AegisData, THREAD_COUNT> guard(holder, tid);
 		benchmark::DoNotOptimize(guard.use());
-		if (tid == 0)
-			holder.try_delete();
 	}
 }
-
-static void BM_SingleThreadHazptr(benchmark::State& state) {
-	std::atomic<HazData*> ptr(new HazData(123));
-
-	for (auto _ : state) {
-		folly::hazptr_holder<> h = folly::make_hazard_pointer();
-		HazData* p = h.protect(ptr);
-		if (p) {
-			benchmark::DoNotOptimize(p);
-			ptr.store(nullptr, std::memory_order_release);
-			p->retire();
-		}
-	}
-	folly::hazptr_cleanup(); // GC 수행
-
-}
+BENCHMARK(BM_AegisPtr_MT)->Threads(2)->Threads(4)->Threads(8)->Threads(16);
 
 static void BM_Hazptr_MT(benchmark::State& state) {
 	static std::atomic<HazData*> ptr(new HazData(123));
@@ -87,9 +86,5 @@ static void BM_Hazptr_MT(benchmark::State& state) {
 
 	if (tid == 0) folly::hazptr_cleanup();
 }
-
-BENCHMARK(BM_SingleThreadAegisPtr);
-BENCHMARK(BM_SingleThreadHazptr);
-BENCHMARK(BM_AegisPtr_MT)->Threads(1)->Threads(2)->Threads(4)->Threads(8)->Threads(16)->Threads(32)->Threads(64);
-BENCHMARK(BM_Hazptr_MT)->Threads(1)->Threads(2)->Threads(4)->Threads(8)->Threads(16)->Threads(32)->Threads(64);
+BENCHMARK(BM_Hazptr_MT)->Threads(2)->Threads(4)->Threads(8)->Threads(16);
 BENCHMARK_MAIN();

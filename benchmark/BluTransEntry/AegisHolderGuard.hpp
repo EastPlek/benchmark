@@ -4,26 +4,19 @@
 #include <atomic>
 #include "AegisPtrBaseHolder.hpp"
 namespace BluBooster::Concurrent::AegisPtr::Internal {
-    template <typename T,size_t MAX_THREADS = 16,bool AEGISPTR_FAST = false>
+    template <typename T,size_t MAX_THREADS = 16>
     struct AegisHolderGuard {
         AegisHolderGuard() = delete;
-        AegisHolderGuard(AegisPtrBaseHolder<T,MAX_THREADS,AEGISPTR_FAST>& ptr,size_t tid) : ref(ptr), tid(tid) {
+        AegisHolderGuard(AegisPtrBaseHolder<T,MAX_THREADS>& ptr,size_t tid) : ref(ptr), tid(tid) {
         }
         ~AegisHolderGuard() {
-            std::atomic_thread_fence(std::memory_order_acquire);
             ref.m_base.flags.Unset(tid);
         }
         T* use() const {
-            if(!hasProtected && ref.m_base.ptr){
-                std::atomic_thread_fence(std::memory_order_release);
-                ref.m_base.flags.Set(tid);
-                hasProtected = true;
-                return ref.m_base.ptr;
-            }
+            ref.m_base.flags.Set(tid);
             return ref.m_base.ptr;
         }
         void unuse() {
-            std::atomic_thread_fence(std::memory_order_acquire);
             ref.m_base.flags.Unset(tid);
         }
         void setDisposable(bool disposable) {
@@ -32,10 +25,13 @@ namespace BluBooster::Concurrent::AegisPtr::Internal {
         bool isUsing () const {
             return !ref.m_base.flags.CanDestroy(ref.m_base.flags);
         }
-        AegisPtrBaseHolder<T,MAX_THREADS,AEGISPTR_FAST>& ref;
+        AegisPtrBaseHolder<T,MAX_THREADS>& ref;
         size_t tid;
         mutable bool hasProtected = false;
     };
+
+
+
 }
 
 #endif // CMANAGERBASEPTRGUARD_HPP
