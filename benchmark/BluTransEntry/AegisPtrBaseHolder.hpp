@@ -193,8 +193,9 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
         AegisPtrBaseHolder(T&& _mvRawData) {
             m_base.ptr = new T (std::move(_mvRawData));
         }
-        AegisPtrBaseHolder(T* _rawPtr) {
+        AegisPtrBaseHolder(T* _rawPtr,bool disposable = false) {
             m_base.ptr = _rawPtr;
+            isDisposable.store(disposable, std::memory_order_release);
         }
         AegisPtrBaseHolder(const AegisPtrBaseHolder<T, MAX_THREADS,FAST_POLICY>& other) = delete;
         AegisPtrBaseHolder<T,MAX_THREADS>& operator= (const AegisPtrBaseHolder<T,MAX_THREADS,FAST_POLICY>& other) = delete;
@@ -205,7 +206,11 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
         }
         AegisPtrBaseHolder& operator=(AegisPtrBaseHolder<T,MAX_THREADS,FAST_POLICY>&& other) = delete;
         ~AegisPtrBaseHolder() {
-            try_delete();
+            if (isDisposable.load(std::memory_order_acquire) && !isDeleted.load(std::memory_order_acquire)
+                && m_base.flags.CanDestroy() && m_base.ptr) {
+                delete m_base.ptr;
+                m_base.ptr = nullptr;
+            }
         }
 
         bool try_delete() {
@@ -219,6 +224,7 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
         }
         AegisPtrBaseHolderSlot<T, MAX_THREADS,FAST_POLICY> m_base{};
         std::atomic<bool> isDeleted{ false };
+        std::atomic<bool> isDisposable{ false };
     };
 
 }

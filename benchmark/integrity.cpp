@@ -9,6 +9,7 @@
 using namespace BluBooster::Concurrent::AegisPtr::Internal;
 
 constexpr int THREAD_COUNT = 16;
+constexpr bool AEGISPTR_FAST = false;
 std::atomic<int> destroy_count{ 0 };
 std::atomic<int> shared_destroy_count{ 0 };
 std::atomic<int> early_gc_count{ 0 };
@@ -45,8 +46,8 @@ struct EarlyGCAegisData {
     }
 };
 
-void aegis_guard_test(AegisPtrBaseHolder<AegisData, THREAD_COUNT>& holder, int tid) {
-    AegisHolderGuard<AegisData, THREAD_COUNT> guard(holder, tid);
+void aegis_guard_test(AegisPtrBaseHolder<AegisData, THREAD_COUNT,AEGISPTR_FAST>& holder, int tid) {
+    AegisHolderGuard<AegisData, THREAD_COUNT,AEGISPTR_FAST> guard(holder, tid);
     AegisData* p = guard.use();
     assert(p->value == tid * 100);
     // simulate some work
@@ -54,14 +55,14 @@ void aegis_guard_test(AegisPtrBaseHolder<AegisData, THREAD_COUNT>& holder, int t
 }
 
 void aegis_guard_shared_test(AegisPtrBaseHolder<SharedAegisData, THREAD_COUNT>& shared_holder, int tid) {
-    AegisHolderGuard<SharedAegisData, THREAD_COUNT> guard(shared_holder, tid);
+    AegisHolderGuard<SharedAegisData, THREAD_COUNT,AEGISPTR_FAST> guard(shared_holder, tid);
     SharedAegisData* p = guard.use();
     assert(p->value == 999);
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
 }
 
 void aegis_early_delete_test(AegisPtrBaseHolder<EarlyGCAegisData, THREAD_COUNT>& holder, int tid) {
-    AegisHolderGuard<EarlyGCAegisData, THREAD_COUNT> guard(holder, tid);
+    AegisHolderGuard<EarlyGCAegisData, THREAD_COUNT,AEGISPTR_FAST> guard(holder, tid);
     auto* ptr = guard.use();
     early_gc_count.fetch_add(1, std::memory_order_acq_rel);
     guard.unuse();
@@ -77,7 +78,7 @@ void aegis_early_delete_test(AegisPtrBaseHolder<EarlyGCAegisData, THREAD_COUNT>&
 
 void run_early_delete_test() {
     EarlyGCAegisData* ptr = new EarlyGCAegisData(900);
-    AegisPtrBaseHolder<EarlyGCAegisData, THREAD_COUNT> early_gc_holder(ptr);
+    AegisPtrBaseHolder<EarlyGCAegisData, THREAD_COUNT,AEGISPTR_FAST> early_gc_holder(ptr);
     std::vector<std::thread> threads;
 
     for (int i = 0; i < THREAD_COUNT; ++i)
@@ -106,7 +107,7 @@ void run_shared_access_test() {
 
 void run_integrity_test() {
     std::vector<std::thread> threads;
-    std::vector<AegisPtrBaseHolder<AegisData, THREAD_COUNT>> holders;
+    std::vector<AegisPtrBaseHolder<AegisData, THREAD_COUNT,AEGISPTR_FAST>> holders;
 
     for (int i = 0; i < THREAD_COUNT; ++i)
     {
