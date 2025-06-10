@@ -96,24 +96,91 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
             return true;
         }
     };
-    template <typename T,size_t MAX_THREADS>
+
+    template < size_t MAX_THREADS>
+    struct alignas(64) AegisPtrBaseHolderFastFlags {
+
+        AegisPtrBaseHolderFastFlags() : bits{} {
+
+        }
+        AegisPtrBaseHolderFastFlags(const AegisPtrBaseHolderFastFlags&) = delete;
+        AegisPtrBaseHolderFastFlags& operator=(const AegisPtrBaseHolderFastFlags&) = delete;
+
+        AegisPtrBaseHolderFastFlags(AegisPtrBaseHolderFastFlags&& other) {
+            bits = std::move(other.bits);
+        }
+        AegisPtrBaseHolderFastFlags& operator= (AegisPtrBaseHolderFastFlags&& other) {
+            bits = std::move(other.bits);
+            return *this;
+        }
+        std::array<uint8_t,MAX_THREADS> bits;
+        BLUBOOSTER_FORCE_INLINE void Set(size_t tid) {
+            bits[tid] = 1;
+            std::atomic_thread_fence(std::memory_order_seq_cst);
+        }
+        BLUBOOSTER_FORCE_INLINE void Unset(size_t tid) {
+            std::atomic_thread_fence(std::memory_order_seq_cst);
+            bits[tid] = 0;
+        }
+        BLUBOOSTER_FORCE_INLINE bool CanDestroy() const {
+            size_t bits_size = bits.size();
+            size_t i = 0;
+            auto* rawBits = reinterpret_cast<const uint8_t*>(&bits[0]);
+            if (BluBooster::cpuFeatures.hasAVX512F) {
+                while (i + 64 <= bits_size) {
+                    __m512i chunk = _mm512_loadu_si512(reinterpret_cast<const __m512i*>(&rawBits[i]));
+                    __mmask64 mask = _mm512_test_epi8_mask(chunk, _mm512_setzero_si512());
+                    if (mask != 0) return false;
+                    i += 64;
+                }
+            }
+            if (BluBooster::cpuFeatures.hasAVX2) {
+                while (i + 32 <= bits_size) {
+                    __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&rawBits[i]));
+                    __m256i cnt = _mm256_cmpeq_epi8(chunk, _mm256_setzero_si256());
+                    int mask = _mm256_movemask_epi8(cnt);
+                    if (mask != -1) return false;
+                    i += 32;
+                }
+            }
+            if (BluBooster::cpuFeatures.hasSSE42) {
+                while (i + 16 <= bits_size) {
+                    __m128i chunk = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&rawBits[i]));
+                    __m128i cmp = _mm_cmpeq_epi8(chunk, _mm_setzero_si128());
+                    int mask = _mm_movemask_epi8(cmp);
+                    if (mask != 0xFFFF) return false;
+                    i += 16;
+                }
+            }
+            for (; i < bits.size(); ++i)
+                if (rawBits[i] != 0) return false;
+            return true;
+        }
+
+    };
+    template <typename T,size_t MAX_THREADS,bool FAST_POLICY>
     struct alignas(64) AegisPtrBaseHolderSlot{
         T* ptr{nullptr};
-        AegisPtrBaseHolderFlags<MAX_THREADS> flags;
+        using SlotType = std::conditional_t<FAST_POLICY,
+            AegisPtrBaseHolderFastFlags<MAX_THREADS>,
+        AegisPtrBaseHolderFlags<MAX_THREADS>>;
+        SlotType flags;
     };
 
-    template <typename T, size_t N>
+    template <typename T, size_t N,bool B>
     struct AegisPtrBaseHolder;
 
     template <typename U>
     struct is_aegis_ptr_base_holder : std::false_type{};
 
-    template <typename U,size_t N>
-    struct is_aegis_ptr_base_holder<AegisPtrBaseHolder<U,N>> : std::true_type{};
+    template <typename U,size_t N,bool B>
+    struct is_aegis_ptr_base_holder<AegisPtrBaseHolder<U,N,B>> : std::true_type{};
 
     template <typename U>
     inline constexpr bool is_aegis_ptr_base_holder_v = is_aegis_ptr_base_holder<std::remove_cv_t<U>>::value;
-    template <typename T,size_t MAX_THREADS = 16>
+
+
+    template <typename T,size_t MAX_THREADS = 16,bool FAST_POLICY = false>
     struct AegisPtrBaseHolder{
         static_assert(!is_aegis_ptr_base_holder_v<T>,"T must not be itself AegisPtrBaseHolder.");
         static_assert(MAX_THREADS % 8 == 0,"Threads Must be divided by 8. ");
@@ -129,27 +196,20 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
         AegisPtrBaseHolder(T* _rawPtr) {
             m_base.ptr = _rawPtr;
         }
-        AegisPtrBaseHolder(const AegisPtrBaseHolder<T, MAX_THREADS>& other) = delete;
-        AegisPtrBaseHolder<T,MAX_THREADS>& operator= (const AegisPtrBaseHolder<T,MAX_THREADS>& other) = delete;
+        AegisPtrBaseHolder(const AegisPtrBaseHolder<T, MAX_THREADS,FAST_POLICY>& other) = delete;
+        AegisPtrBaseHolder<T,MAX_THREADS>& operator= (const AegisPtrBaseHolder<T,MAX_THREADS,FAST_POLICY>& other) = delete;
         AegisPtrBaseHolder(AegisPtrBaseHolder&& other) noexcept {
             assert(m_base.ptr == nullptr); // 이동 전 객체는 비어있어야
             m_base.ptr = std::exchange(other.m_base.ptr, nullptr); // 소유권 이전
             m_base.flags = std::move(other.m_base.flags);
         }
-        AegisPtrBaseHolder& operator=(AegisPtrBaseHolder<T,MAX_THREADS>&& other) = delete;
-        
+        AegisPtrBaseHolder& operator=(AegisPtrBaseHolder<T,MAX_THREADS,FAST_POLICY>&& other) = delete;
         ~AegisPtrBaseHolder() {
-            bool Deleted = isDeleted.load(std::memory_order_acquire);
-            if(!Deleted && m_base.flags.CanDestroy() && m_base.ptr)
-            {
-                delete m_base.ptr;
-                m_base.ptr = nullptr;
-            }
+            try_delete();
         }
 
         bool try_delete() {
-            bool Deleted = isDeleted.load(std::memory_order_acquire);
-            if (!Deleted && m_base.flags.CanDestroy() && m_base.ptr) {
+            if (!isDeleted.load(std::memory_order_acquire) && m_base.flags.CanDestroy() && m_base.ptr) {
                 isDeleted.store(true, std::memory_order_release);
                 delete m_base.ptr;
                 m_base.ptr = nullptr;
@@ -157,9 +217,11 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
             }
             return false;
         }
-        AegisPtrBaseHolderSlot<T,MAX_THREADS> m_base{};
+        AegisPtrBaseHolderSlot<T, MAX_THREADS,FAST_POLICY> m_base{};
         std::atomic<bool> isDeleted{ false };
     };
+
 }
+
 
 #endif // CMANAGERBASEPTR_HPP
