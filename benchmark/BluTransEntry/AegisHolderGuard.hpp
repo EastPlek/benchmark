@@ -10,17 +10,17 @@ namespace BluBooster::Concurrent::AegisPtr::Internal {
         AegisHolderGuard(AegisPtrBaseHolder<T,MAX_THREADS>& ptr,size_t tid) : ref(ptr), tid(tid) {
         }
         ~AegisHolderGuard() {
-            std::atomic_thread_fence(std::memory_order_acquire);
             ref.m_base.flags.Unset(tid);
         }
-        T* operator->() const {
-            if(!hasProtected){
-                std::atomic_thread_fence(std::memory_order_release);
-                ref.m_base.flags.Set(tid);
-                hasProtected = true;
-                return ref.m_base.ptr;
-            }
+        T* use() const {
+            ref.m_base.flags.Set(tid);
             return ref.m_base.ptr;
+        }
+        void unuse() {
+            ref.m_base.flags.Unset(tid);
+        }
+        void setDisposable(bool disposable) {
+            ref.isDisposable.store(disposable);
         }
         bool isUsing () const {
             return !ref.m_base.flags.CanDestroy(ref.m_base.flags);
@@ -29,6 +29,9 @@ namespace BluBooster::Concurrent::AegisPtr::Internal {
         size_t tid;
         mutable bool hasProtected = false;
     };
+
+
+
 }
 
 #endif // CMANAGERBASEPTRGUARD_HPP

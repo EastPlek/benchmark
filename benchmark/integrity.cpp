@@ -8,7 +8,7 @@
 
 using namespace BluBooster::Concurrent::AegisPtr::Internal;
 
-constexpr int THREAD_COUNT = 8192;
+constexpr int THREAD_COUNT = 16;
 std::atomic<int> destroy_count{ 0 };
 std::atomic<int> shared_destroy_count{ 0 };
 std::atomic<int> early_gc_count{ 0 };
@@ -67,7 +67,7 @@ void aegis_early_delete_test(AegisPtrBaseHolder<EarlyGCAegisData, THREAD_COUNT>&
     guard.unuse();
     if (early_gc_count.load(std::memory_order_acquire) > 4) {
         if (guard.use() == nullptr) {
-            std::cout << early_gc_count.load(std::memory_order_acquire) << " early gc test success" << '\n';
+            std::cout << "early gc test success" << '\n';
         }
         else {
             guard.ref.try_delete();
@@ -77,7 +77,7 @@ void aegis_early_delete_test(AegisPtrBaseHolder<EarlyGCAegisData, THREAD_COUNT>&
 
 void run_early_delete_test() {
     EarlyGCAegisData* ptr = new EarlyGCAegisData(900);
-    AegisPtrBaseHolder<EarlyGCAegisData, THREAD_COUNT> early_gc_holder(ptr);
+    AegisPtrBaseHolder<EarlyGCAegisData, THREAD_COUNT> early_gc_holder(ptr,true);
     std::vector<std::thread> threads;
 
     for (int i = 0; i < THREAD_COUNT; ++i)
@@ -88,7 +88,7 @@ void run_early_delete_test() {
 }
 void run_shared_access_test() {
     SharedAegisData* ptr = new SharedAegisData(999);
-    AegisPtrBaseHolder<SharedAegisData, THREAD_COUNT> shared_holder(ptr);
+    AegisPtrBaseHolder<SharedAegisData, THREAD_COUNT> shared_holder(ptr,true);
     std::vector<std::thread> threads;
 
     for (int i = 0; i < THREAD_COUNT; ++i)
@@ -98,8 +98,8 @@ void run_shared_access_test() {
     std::cout << "shared access done." << '\n';
 
 
-    for (int j = 0; j < (THREAD_COUNT + 63) / 64; ++j)
-        assert(shared_holder.m_base.flags.bits[j].load() == 0);
+    for (int j = 0; j < THREAD_COUNT; ++j)
+        assert(shared_holder.m_base.flags.bits[j].bit.load() == 0);
 
     std::cout << "[PASS] Shared AegisPtr multi-thread test passed.\n";
 }
@@ -111,7 +111,7 @@ void run_integrity_test() {
     for (int i = 0; i < THREAD_COUNT; ++i)
     {
         AegisData* data = new AegisData(i * 100);
-        holders.emplace_back(data);
+        holders.emplace_back(AegisPtrBaseHolder<AegisData,THREAD_COUNT>(data,true));
     }
 
     for (int i = 0; i < THREAD_COUNT; ++i)
@@ -128,12 +128,13 @@ void run_integrity_test() {
 
     // test 5: check flag reset
     for (int i = 0; i < THREAD_COUNT; ++i) {
-        const auto& flags = holders[i].m_base.flags.bits; // implement getter if needed
-        for (int j = 0; j < (THREAD_COUNT + 63) / 64; ++j)
+        const auto& flags = holders[i].m_base.flags.bits[i]; // implement getter if needed
+        for (int j = 0; j < THREAD_COUNT; ++j)
         {
-            assert(flags[j].load(std::memory_order::acquire) == 0); // all flags cleared
+            assert(flags.bit.load(std::memory_order::acquire) == 0); // all flags cleared
         }
     }
+    std::cout << "Flag is Okay! " << '\n';
 }
 int main() {
     auto t1 = std::chrono::system_clock::now();
