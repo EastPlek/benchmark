@@ -7,16 +7,14 @@
 #include "SharedObjects.hpp"
 #include "Macros.hpp"
 
-constexpr bool compactMode = true;
 namespace BluBooster::Concurrent::AegisPtr::Internal{
 
-    struct alignas(64) AegisBits {
-        using BitType = std::conditional_t<compactMode, std::atomic<uint64_t>, std::atomic<uint8_t>>;
+    struct  AegisBits {
+        using BitType = std::atomic<uint64_t>;
         BitType bit{ 0 };
-        char padding[64 - sizeof(bit)];
+        //char padding[64 - sizeof(bit)];
     };
-    template <size_t MAX_THREADS>
-    struct alignas(64) AegisPtrBaseHolderFlags {
+    struct AegisPtrBaseHolderFlags {
 
         AegisPtrBaseHolderFlags():  bits {}{
         }
@@ -26,74 +24,34 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
         AegisPtrBaseHolderFlags& operator=(const AegisPtrBaseHolderFlags&) = delete;
 
         AegisPtrBaseHolderFlags(AegisPtrBaseHolderFlags&& other) {
-            for (size_t i = 0; i < bits.size(); ++i)
-                bits[i].bit.store(other.bits[i].bit.load(std::memory_order_relaxed));
+            bits.bit.store(other.bits.bit.load(std::memory_order_relaxed));
         }
         AegisPtrBaseHolderFlags& operator= (AegisPtrBaseHolderFlags&& other) {
-            if constexpr (compactMode) {
-                for (size_t i = 0; i < bits.size(); ++i)
-                    bits[i].bit.store(other.bits[i].bit.load(std::memory_order_relaxed));
-            }
-            else {
-                for (size_t i = 0; i < bits.size(); ++i)
-                    bits[i].bit.store(other.bits[i].bit.load(std::memory_order_relaxed));
-            }
+            bits.bit.store(other.bits.bit.load(std::memory_order_relaxed));
             return *this;
         }
-        using BitType = std::conditional_t<compactMode,std::array<AegisBits,2>, std::array<AegisBits, MAX_THREADS >>;
-        BitType bits;
-        BLUBOOSTER_FORCE_INLINE void Set(size_t tid) {
-            if constexpr (compactMode) {
-                bits[tid % 2].bit.fetch_add(1, std::memory_order_relaxed);
-            }
-            else {
-                bits[tid].bit.store(1, std::memory_order_release);
-            }
+        AegisBits bits;
+        BLUBOOSTER_FORCE_INLINE void Set() {
+                bits.bit.fetch_add(1, std::memory_order_relaxed);
         }
-        BLUBOOSTER_FORCE_INLINE void Unset(size_t tid) {
-            if constexpr (compactMode) {
-                bits[tid % 2].bit.fetch_sub(1, std::memory_order_relaxed);
-            }
-            else{
-                bits[tid].bit.store(0, std::memory_order_release);
-            }
+        BLUBOOSTER_FORCE_INLINE void Unset() {
+            bits.bit.fetch_sub(1, std::memory_order_relaxed);
         }
         BLUBOOSTER_FORCE_INLINE bool CanDestroy()  {
-            if constexpr (compactMode) {
-                for (int i = 0; i < bits.size(); ++i)
-                    if (bits[i].bit.load(std::memory_order_acquire) != 0) return false;
-            } else {
-                for (int i = 0; i < bits.size(); ++i)
-                    if (bits[i].bit.load(std::memory_order_acquire) != 0) return false;
-            }
-            return true;
+            return bits.bit.load(std::memory_order_acquire) == 0;
         }
     };
 
     
-    template <typename T,size_t MAX_THREADS>
-    struct alignas(64) AegisPtrBaseHolderSlot{
+    template <typename T>
+    struct AegisPtrBaseHolderSlot{
         T* ptr{nullptr};
-        AegisPtrBaseHolderFlags<MAX_THREADS>flags;
+        AegisPtrBaseHolderFlags flags;
     };
 
-    template <typename T, size_t N>
-    struct AegisPtrBaseHolder;
 
-    template <typename U>
-    struct is_aegis_ptr_base_holder : std::false_type{};
-
-    template <typename U,size_t N>
-    struct is_aegis_ptr_base_holder<AegisPtrBaseHolder<U,N>> : std::true_type{};
-
-    template <typename U>
-    inline constexpr bool is_aegis_ptr_base_holder_v = is_aegis_ptr_base_holder<std::remove_cv_t<U>>::value;
-
-
-    template <typename T,size_t MAX_THREADS = 16>
-    struct alignas(64) AegisPtrBaseHolder{
-        static_assert(!is_aegis_ptr_base_holder_v<T>,"T must not be itself AegisPtrBaseHolder.");
-        static_assert(MAX_THREADS % 8 == 0,"Threads Must be divided by 8. ");
+    template <typename T>
+    struct AegisPtrBaseHolder{
         AegisPtrBaseHolder() {
             m_base.ptr = nullptr;
         }
@@ -107,15 +65,15 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
             m_base.ptr = _rawPtr;
             isDisposable.store(disposable, std::memory_order_release);
         }
-        AegisPtrBaseHolder(const AegisPtrBaseHolder<T, MAX_THREADS>& other) = delete;
-        AegisPtrBaseHolder<T,MAX_THREADS>& operator= (const AegisPtrBaseHolder<T,MAX_THREADS>& other) = delete;
+        AegisPtrBaseHolder(const AegisPtrBaseHolder<T>& other) = delete;
+        AegisPtrBaseHolder<T>& operator= (const AegisPtrBaseHolder<T>& other) = delete;
         AegisPtrBaseHolder(AegisPtrBaseHolder&& other) noexcept {
             assert(m_base.ptr == nullptr); // 이동 전 객체는 비어있어야
             m_base.ptr = std::exchange(other.m_base.ptr, nullptr); // 소유권 이전
             isDisposable = other.isDisposable.load(std::memory_order_acquire);
             m_base.flags = std::move(other.m_base.flags);
         }
-        AegisPtrBaseHolder& operator=(AegisPtrBaseHolder<T,MAX_THREADS>&& other) = delete;
+        AegisPtrBaseHolder& operator=(AegisPtrBaseHolder<T>&& other) = delete;
         ~AegisPtrBaseHolder() {
             if (isDisposable.load(std::memory_order_acquire) && !isDeleted.load(std::memory_order_acquire)
                 && m_base.flags.CanDestroy() && m_base.ptr) {
@@ -133,7 +91,7 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
             }
             return false;
         }
-        AegisPtrBaseHolderSlot<T, MAX_THREADS> m_base{};
+        AegisPtrBaseHolderSlot<T> m_base{};
         std::atomic<bool> isDeleted{ false };
         std::atomic<bool> isDisposable{ false };
     };

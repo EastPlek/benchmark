@@ -60,23 +60,23 @@ struct MultipleAegisData {
     }
 };
 
-void aegis_guard_test(AegisPtrBaseHolder<AegisData, THREAD_COUNT>& holder, int tid) {
-    AegisHolderGuard<AegisData, THREAD_COUNT> guard(holder, tid);
+void aegis_guard_test(AegisPtrBaseHolder<AegisData>& holder) {
+    AegisHolderGuard<AegisData> guard(holder);
     AegisData* p = guard.use();
-    assert(p->value == tid * 100);
+    assert(p->value == 100);
     // simulate some work
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
 }
 
-void aegis_guard_shared_test(AegisPtrBaseHolder<SharedAegisData, THREAD_COUNT>& shared_holder, int tid) {
-    AegisHolderGuard<SharedAegisData, THREAD_COUNT> guard(shared_holder, tid);
+void aegis_guard_shared_test(AegisPtrBaseHolder<SharedAegisData>& shared_holder) {
+    AegisHolderGuard<SharedAegisData> guard(shared_holder);
     SharedAegisData* p = guard.use();
     assert(p->value == 999);
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
 }
 
-void aegis_early_delete_test(AegisPtrBaseHolder<EarlyGCAegisData, THREAD_COUNT>& holder, int tid) {
-    AegisHolderGuard<EarlyGCAegisData, THREAD_COUNT> guard(holder, tid);
+void aegis_early_delete_test(AegisPtrBaseHolder<EarlyGCAegisData>& holder) {
+    AegisHolderGuard<EarlyGCAegisData> guard(holder);
     auto* ptr = guard.use();
     early_gc_count.fetch_add(1, std::memory_order_acq_rel);
     guard.unuse();
@@ -92,11 +92,11 @@ void aegis_early_delete_test(AegisPtrBaseHolder<EarlyGCAegisData, THREAD_COUNT>&
 
 void run_early_delete_test() {
     EarlyGCAegisData* ptr = new EarlyGCAegisData(900);
-    AegisPtrBaseHolder<EarlyGCAegisData, THREAD_COUNT> early_gc_holder(ptr,true);
+    AegisPtrBaseHolder<EarlyGCAegisData> early_gc_holder(ptr,true);
     std::vector<std::thread> threads;
 
     for (int i = 0; i < THREAD_COUNT; ++i)
-        threads.emplace_back(aegis_early_delete_test, std::ref(early_gc_holder), i);
+        threads.emplace_back(aegis_early_delete_test, std::ref(early_gc_holder));
 
     for (auto& t : threads) t.join();
 
@@ -105,11 +105,11 @@ void run_early_delete_test() {
 }
 void run_shared_access_test() {
     SharedAegisData* ptr = new SharedAegisData(999);
-    AegisPtrBaseHolder<SharedAegisData, THREAD_COUNT> shared_holder(ptr,true);
+    AegisPtrBaseHolder<SharedAegisData> shared_holder(ptr,true);
     std::vector<std::thread> threads;
 
     for (int i = 0; i < THREAD_COUNT; ++i)
-        threads.emplace_back(aegis_guard_shared_test, std::ref(shared_holder), i);
+        threads.emplace_back(aegis_guard_shared_test, std::ref(shared_holder));
 
     for (auto& t : threads) t.join();
     std::cout << "shared access done." << '\n';
@@ -120,57 +120,57 @@ void run_shared_access_test() {
     std::cout << "[PASS] Shared AegisPtr multi-thread test passed.\n";
 }
 
-void run_multiple_shared_test_inside2(AegisPtrBaseHolder<MultipleAegisData,THREAD_COUNT>& holder, int tid) {
-    AegisHolderGuard<MultipleAegisData, THREAD_COUNT> guard(holder, tid);
+void run_multiple_shared_test_inside2(AegisPtrBaseHolder<MultipleAegisData>& holder) {
+    AegisHolderGuard<MultipleAegisData> guard(holder);
     MultipleAegisData* data = guard.use();
     data->use();
 }
-void run_multiple_shaerd_test_inside(AegisPtrBaseHolder<MultipleAegisData,THREAD_COUNT>& holder, int tid) {
+void run_multiple_shaerd_test_inside(AegisPtrBaseHolder<MultipleAegisData>& holder) {
     std::vector<std::thread> threads;
 
-    AegisHolderGuard<MultipleAegisData, THREAD_COUNT> guard(holder, tid);
+    AegisHolderGuard<MultipleAegisData> guard(holder);
     MultipleAegisData* data = guard.use();
     data->use();
 
     for (int i = 0; i < 2; ++i) {
-        threads.emplace_back(run_multiple_shared_test_inside2, std::ref(holder), tid + 1 + i);
+        threads.emplace_back(run_multiple_shared_test_inside2, std::ref(holder));
     }
     for (auto& t : threads) t.join();
 }
 
 void run_multiple_shared_test() {
     std::vector<std::thread> threads;
-    std::vector<AegisPtrBaseHolder<MultipleAegisData, THREAD_COUNT>> holders;
+    std::vector<AegisPtrBaseHolder<MultipleAegisData>> holders;
 
     for (int i = 0; i < 2; ++i) {
         MultipleAegisData* data = new MultipleAegisData(i * 100);
-        holders.emplace_back(AegisPtrBaseHolder<MultipleAegisData, THREAD_COUNT>(data, true));
+        holders.emplace_back(AegisPtrBaseHolder<MultipleAegisData>(data, true));
     }
 
     for (int i = 0; i < 2; ++i) {
-        threads.emplace_back(run_multiple_shaerd_test_inside,std::ref(holders[i]),i * 4);
+        threads.emplace_back(run_multiple_shaerd_test_inside,std::ref(holders[i]));
     }
     for (auto& t : threads) t.join();
 
 
 }
 
-void run_multiple_create_test_inside2(AegisPtrBaseHolder<MultipleAegisData>& holder,int tid) {
-    AegisHolderGuard<MultipleAegisData, THREAD_COUNT> guard(holder, tid);
+void run_multiple_create_test_inside2(AegisPtrBaseHolder<MultipleAegisData>& holder) {
+    AegisHolderGuard<MultipleAegisData> guard(holder);
     guard.use()->use();
 }
 
-void run_multiple_create_test_inside(int tid) {
+void run_multiple_create_test_inside() {
     std::vector<std::thread> threads;
-    std::vector<AegisPtrBaseHolder<MultipleAegisData, THREAD_COUNT>> holders;
+    std::vector<AegisPtrBaseHolder<MultipleAegisData>> holders;
 
     for (int i = 0; i < 2; ++i) {
         MultipleAegisData* data = new MultipleAegisData(i * 100);
-        holders.emplace_back(AegisPtrBaseHolder<MultipleAegisData, THREAD_COUNT>(data, true));
+        holders.emplace_back(AegisPtrBaseHolder<MultipleAegisData>(data, true));
     }
 
     for (int i = 0; i < 2; ++i) {
-        threads.emplace_back(run_multiple_create_test_inside2,std::ref(holders[i]), tid + i + 1);
+        threads.emplace_back(run_multiple_create_test_inside2,std::ref(holders[i]));
     }
     for (auto& t : threads) t.join();
 }
@@ -179,22 +179,22 @@ void run_multiple_create_test() {
     std::vector<std::thread> threads;
 
     for (int i = 0; i < 2; ++i) {
-        threads.emplace_back(run_multiple_create_test_inside, i * 4);
+        threads.emplace_back(run_multiple_create_test_inside);
     }
     for (auto& t : threads) t.join();
 }
 void run_integrity_test() {
     std::vector<std::thread> threads;
-    std::vector<AegisPtrBaseHolder<AegisData, THREAD_COUNT>> holders;
+    std::vector<AegisPtrBaseHolder<AegisData>> holders;
 
     for (int i = 0; i < THREAD_COUNT; ++i)
     {
-        AegisData* data = new AegisData(i * 100);
-        holders.emplace_back(AegisPtrBaseHolder<AegisData,THREAD_COUNT>(data,true));
+        AegisData* data = new AegisData(100);
+        holders.emplace_back(AegisPtrBaseHolder<AegisData>(data,true));
     }
 
     for (int i = 0; i < THREAD_COUNT; ++i)
-        threads.emplace_back(aegis_guard_test, std::ref(holders[i]), i);
+        threads.emplace_back(aegis_guard_test, std::ref(holders[i]));
 
     for (auto& t : threads) t.join();
 
@@ -210,6 +210,8 @@ void run_integrity_test() {
     run_multiple_create_test();
     assert(multiple_count.load() == 4);
 
+    std::cout << "Sizeof AegisPtr : " << sizeof(AegisPtrBaseHolder<int>) << '\n';
+    std::cout << "Sizeof SharedPtr : " << sizeof(std::shared_ptr<int>) << '\n';
 
     assert(shared_destroy_count.load() == 1); // shared °´Ã¼´Â ÇÑ ¹ø¸¸ ÆÄ±«µÅ¾ß ÇÔ
 

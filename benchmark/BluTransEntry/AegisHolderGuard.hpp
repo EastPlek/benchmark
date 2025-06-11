@@ -7,14 +7,14 @@ namespace BluBooster::Concurrent::AegisPtr::Internal {
     template <typename T,size_t MAX_THREADS = 16>
     struct AegisHolderGuard {
         AegisHolderGuard() = delete;
-        AegisHolderGuard(AegisPtrBaseHolder<T,MAX_THREADS>& ptr,size_t tid) : ref(ptr), tid(tid) {
+        AegisHolderGuard(AegisPtrBaseHolder<T>& ptr) : ref(ptr) {
         }
         ~AegisHolderGuard() {
             unuse();
         }
         T* use() const {
             if(!hasProtected && !isGuarding){
-                ref.m_base.flags.Set(tid);
+                ref.m_base.flags.Set();
                 hasProtected = true;
                 isGuarding = true;
             }
@@ -22,7 +22,7 @@ namespace BluBooster::Concurrent::AegisPtr::Internal {
         }
         void unuse() {
             if(isGuarding){
-                ref.m_base.flags.Unset(tid);
+                ref.m_base.flags.Unset();
                 isGuarding = false;
             }
         }
@@ -32,8 +32,7 @@ namespace BluBooster::Concurrent::AegisPtr::Internal {
         bool isUsing () const {
             return !ref.m_base.flags.CanDestroy(ref.m_base.flags);
         }
-        AegisPtrBaseHolder<T,MAX_THREADS>& ref;
-        size_t tid;
+        AegisPtrBaseHolder<T>& ref;
         mutable bool hasProtected = false;
         mutable bool isGuarding = false;
     };
