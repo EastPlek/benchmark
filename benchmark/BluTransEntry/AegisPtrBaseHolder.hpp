@@ -7,16 +7,20 @@
 #include "SharedObjects.hpp"
 #include "Macros.hpp"
 
+constexpr bool compactMode = true;
 namespace BluBooster::Concurrent::AegisPtr::Internal{
+
     struct alignas(64) AegisBits {
-        std::atomic<uint8_t> bit;
-        char padding[63];
+        using BitType = std::conditional_t<compactMode, std::atomic<uint64_t>, std::atomic<uint8_t>>;
+        BitType bit{ 0 };
+        char padding[64 - sizeof(bit)];
     };
     template <size_t MAX_THREADS>
     struct alignas(64) AegisPtrBaseHolderFlags {
 
         AegisPtrBaseHolderFlags():  bits {}{
-
+        }
+        ~AegisPtrBaseHolderFlags() {
         }
         AegisPtrBaseHolderFlags(const AegisPtrBaseHolderFlags&) = delete;
         AegisPtrBaseHolderFlags& operator=(const AegisPtrBaseHolderFlags&) = delete;
@@ -26,21 +30,42 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
                 bits[i].bit.store(other.bits[i].bit.load(std::memory_order_relaxed));
         }
         AegisPtrBaseHolderFlags& operator= (AegisPtrBaseHolderFlags&& other) {
-            for (size_t i = 0; i < bits.size(); ++i)
-                bits[i].bit.store(other.bits[i].bit.load(std::memory_order_relaxed));
+            if constexpr (compactMode) {
+                for (size_t i = 0; i < bits.size(); ++i)
+                    bits[i].bit.store(other.bits[i].bit.load(std::memory_order_relaxed));
+            }
+            else {
+                for (size_t i = 0; i < bits.size(); ++i)
+                    bits[i].bit.store(other.bits[i].bit.load(std::memory_order_relaxed));
+            }
             return *this;
         }
-        using BitType = AegisBits;
-        std::array<BitType,MAX_THREADS> bits;
+        using BitType = std::conditional_t<compactMode,std::array<AegisBits,2>, std::array<AegisBits, MAX_THREADS >>;
+        BitType bits;
         BLUBOOSTER_FORCE_INLINE void Set(size_t tid) {
-            bits[tid].bit.store(1,std::memory_order_release);
+            if constexpr (compactMode) {
+                bits[tid % 2].bit.fetch_add(1, std::memory_order_relaxed);
+            }
+            else {
+                bits[tid].bit.store(1, std::memory_order_release);
+            }
         }
         BLUBOOSTER_FORCE_INLINE void Unset(size_t tid) {
-            bits[tid].bit.store(0, std::memory_order_release);
+            if constexpr (compactMode) {
+                bits[tid % 2].bit.fetch_sub(1, std::memory_order_relaxed);
+            }
+            else{
+                bits[tid].bit.store(0, std::memory_order_release);
+            }
         }
-        BLUBOOSTER_FORCE_INLINE bool CanDestroy() const {
-            for(int i = 0; i < bits.size(); ++i)
-                if(bits[i].bit.load(std::memory_order_acquire) != 0) return false;
+        BLUBOOSTER_FORCE_INLINE bool CanDestroy()  {
+            if constexpr (compactMode) {
+                for (int i = 0; i < bits.size(); ++i)
+                    if (bits[i].bit.load(std::memory_order_acquire) != 0) return false;
+            } else {
+                for (int i = 0; i < bits.size(); ++i)
+                    if (bits[i].bit.load(std::memory_order_acquire) != 0) return false;
+            }
             return true;
         }
     };
@@ -66,7 +91,7 @@ namespace BluBooster::Concurrent::AegisPtr::Internal{
 
 
     template <typename T,size_t MAX_THREADS = 16>
-    struct AegisPtrBaseHolder{
+    struct alignas(64) AegisPtrBaseHolder{
         static_assert(!is_aegis_ptr_base_holder_v<T>,"T must not be itself AegisPtrBaseHolder.");
         static_assert(MAX_THREADS % 8 == 0,"Threads Must be divided by 8. ");
         AegisPtrBaseHolder() {
