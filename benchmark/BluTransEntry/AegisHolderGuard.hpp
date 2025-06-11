@@ -10,14 +10,21 @@ namespace BluBooster::Concurrent::AegisPtr::Internal {
         AegisHolderGuard(AegisPtrBaseHolder<T,MAX_THREADS>& ptr,size_t tid) : ref(ptr), tid(tid) {
         }
         ~AegisHolderGuard() {
-            ref.m_base.flags.Unset(tid);
+            unuse();
         }
         T* use() const {
-            ref.m_base.flags.Set(tid);
+            if(!hasProtected && !isGuarding){
+                ref.m_base.flags.Set(tid);
+                hasProtected = true;
+                isGuarding = true;
+            }
             return ref.m_base.ptr;
         }
         void unuse() {
-            ref.m_base.flags.Unset(tid);
+            if(isGuarding){
+                ref.m_base.flags.Unset(tid);
+                isGuarding = false;
+            }
         }
         void setDisposable(bool disposable) {
             ref.isDisposable.store(disposable);
@@ -28,6 +35,7 @@ namespace BluBooster::Concurrent::AegisPtr::Internal {
         AegisPtrBaseHolder<T,MAX_THREADS>& ref;
         size_t tid;
         mutable bool hasProtected = false;
+        mutable bool isGuarding = false;
     };
 
 

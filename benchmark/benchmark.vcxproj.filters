@@ -3,6 +3,7 @@
   <ItemGroup>
     <ClCompile Include="input test.cpp" />
     <ClCompile Include="integrity.cpp" />
+    <ClCompile Include="integrity_ghost.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BluTransEntry\AegisHolderGuard.hpp">
@@ -45,6 +46,9 @@
       <Filter>BluBooster</Filter>
     </ClInclude>
     <ClInclude Include="Hazard.hpp" />
+    <ClInclude Include="AegisPtrBaseGhostHolder.hpp">
+      <Filter>BluBooster</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="BluBooster">

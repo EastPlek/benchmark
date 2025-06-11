@@ -37,32 +37,6 @@ struct HazData : folly::hazptr_obj_base<HazData> {
 };
 
 
-BluBooster::Concurrent::AegisPtr::Internal::AegisPtrBaseHolderFlags<16> flags;
-
-static void BM_Set(benchmark::State& state) {
-	AegisPtrBaseHolder<AegisData, 16> holder;
-	int tid = state.thread_index();
-	for (auto _ : state)
-		holder.m_base.flags.Set(tid); // 고정된 tid로 테스트
-}
-BENCHMARK(BM_Set)->Threads(2)->Threads(4)->Threads(8)->Threads(16);
-
-static void BM_Unset(benchmark::State& state) {
-	AegisPtrBaseHolder<AegisData, 16> holder;
-	int tid = state.thread_index();
-	for (auto _ : state)
-		holder.m_base.flags.Unset(tid);
-}
-BENCHMARK(BM_Unset)->Threads(2)->Threads(4)->Threads(8)->Threads(16);
-
-static void BM_GuardGeneration(benchmark::State& state) {
-	AegisPtrBaseHolder<AegisData, 16> holder;
-	int tid = state.thread_index();
-	for (auto _ : state)
-		AegisHolderGuard<AegisData, 16>(holder, tid);
-}
-BENCHMARK(BM_GuardGeneration)->Threads(2)->Threads(4)->Threads(8)->Threads(16);
-
 static void BM_AegisPtr_MT(benchmark::State& state) {
 	static AegisPtrBaseHolder<AegisData, THREAD_COUNT> holder(new AegisData(123),true);
 	int tid = state.thread_index();
@@ -70,10 +44,9 @@ static void BM_AegisPtr_MT(benchmark::State& state) {
 	for (auto _ : state) {
 		AegisHolderGuard<AegisData, THREAD_COUNT> guard(holder, tid);
 		benchmark::DoNotOptimize(guard.use());
-		holder.try_delete();
 	}
 }
-BENCHMARK(BM_AegisPtr_MT)->Threads(2)->Threads(4)->Threads(8)->Threads(16);
+BENCHMARK(BM_AegisPtr_MT)->Threads(2)->Threads(4)->Threads(8)->Threads(12);
 
 static void BM_Hazptr_MT(benchmark::State& state) {
 	static std::atomic<HazData*> ptr(new HazData(123));
@@ -87,5 +60,5 @@ static void BM_Hazptr_MT(benchmark::State& state) {
 
 	if (tid == 0) folly::hazptr_cleanup();
 }
-BENCHMARK(BM_Hazptr_MT)->Threads(2)->Threads(4)->Threads(8)->Threads(16);
+BENCHMARK(BM_Hazptr_MT)->Threads(2)->Threads(4)->Threads(8)->Threads(12);
 BENCHMARK_MAIN();
