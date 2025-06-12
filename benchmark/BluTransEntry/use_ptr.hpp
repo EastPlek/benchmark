@@ -1,12 +1,8 @@
 #ifndef CMANAGERBASEPTR_HPP
 #define CMANAGERBASEPTR_HPP
-#include <array>
 #include <atomic>
-#include <cassert>
 #include <cstdint>
-#include "CPU.hpp"
-#include "SharedObjects.hpp"
-#include "Macros.hpp"
+
 
 namespace BluBooster::Memory {
 
