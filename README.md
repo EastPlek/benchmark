@@ -1,6 +1,7 @@
 # AegisPtr (Temp) vs folly::hazptr
 ---
 by EastPlek (Code First Created : 2025. 06. 08 | README First Created : 2025. 06. 10)
+(AegisPtr has changed its name to use_ptr at 2025. 06. 12.)
 
 ## AegisPtr란?
 AegisPtr는 기존의 thread간의 공유되는 자원의 소멸 시점을 Use-ref GC를 기반으로 수거합니다.
