@@ -3,16 +3,10 @@
   <ItemGroup>
     <ClCompile Include="input test.cpp" />
     <ClCompile Include="integrity.cpp" />
-    <ClCompile Include="integrity_ghost.cpp" />
+    <ClCompile Include="circular_ref.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="BluTransEntry\AegisHolderGuard.hpp">
-      <Filter>BluBooster</Filter>
-    </ClInclude>
-    <ClInclude Include="BluTransEntry\AegisPtrBaseHolder.hpp">
-      <Filter>BluBooster</Filter>
-    </ClInclude>
-    <ClInclude Include="BluTransEntry\AegisPtrBaseManager.hpp">
+    <ClInclude Include="BluTransEntry\use_ptr.hpp">
       <Filter>BluBooster</Filter>
     </ClInclude>
     <ClInclude Include="BluTransEntry\BluBooster.hpp">
@@ -43,10 +37,6 @@
       <Filter>BluBooster</Filter>
     </ClInclude>
     <ClInclude Include="BluTransEntry\SystemAllocator.hpp">
-      <Filter>BluBooster</Filter>
-    </ClInclude>
-    <ClInclude Include="Hazard.hpp" />
-    <ClInclude Include="AegisPtrBaseGhostHolder.hpp">
       <Filter>BluBooster</Filter>
     </ClInclude>
   </ItemGroup>
