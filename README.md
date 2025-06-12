@@ -5,7 +5,7 @@ by EastPlek
 (Renamed AegisPtr -> use_ptr at 2025. 06. 12.)
 
 Korean Version
-To Read English Version, scroll down further.
+(To Read English Version, scroll down further.)
 ---
 ## Use-ref GC 란?
 대부분의 메모리 관련 버그는 **UAF (Use-After-Free)**에서 옵니다.
