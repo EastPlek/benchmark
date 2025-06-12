@@ -23,3 +23,7 @@ guard-> 또는 guard.use()를 호출해서 카운트를 AegisPtr<T>에 fetch_add
 guard는 unuse()가 호출되지 않았다면 RAII로 자동으로 Unuse()를 합니다.
 
 AegisPtr<T>는 사용 카운트가 0이고 earlyGC가 되지 않았다면 자동으로 삭제합니다.
+
+## 순환참조?
+기존 std::shared_ptr는 A -> B | B -> A 모델에서 순환 참조하여 메모리 leak이 발생하는 일이 생깁니다.
+Use-ref GC는 사용 기반 카운트 참조로 사용자가 Use()하고 Unuse()만 잘 설정하면 순환참조가 발생하지 않습니다.
