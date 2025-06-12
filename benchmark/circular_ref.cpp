@@ -1,6 +1,6 @@
 #include "BluTransEntry/use_ptr.hpp"
 #include <iostream>
-using namespace BluBooster::Memory;
+using namespace UsePtr;
 
 struct C; // 먼저 선언
 struct B; // 먼저 선언
@@ -33,20 +33,20 @@ void test() {
 	use_ptr<B> b(new B(2));
 	use_ptr<C> c(new C(3));
 
-	a->ptr.store(b);     // A → B
-	b->ptr.store(c);     // B → C
-	c->ptr.store(a);     // C → A (업캐스팅 OK)
+	use_guard<A> guard(a);
+	use_guard<B> guard2(b);
+	use_guard<C> guard3(c);
+
+	guard->ptr.store(b);     // A → B
+	guard2->ptr.store(c);     // B → C
+	guard3->ptr.store(a);     // C → A (업캐스팅 OK)
 
 	// 다형성도 가능
-	c->say();           // "C"
-	a->ptr->say();
-	a->ptr->ptr->say(); // "C" (A → B → C)
-	a->ptr->ptr->ptr->say();
+	guard->say();           // "C"
+	guard2->say();
+	guard3->say(); // "C" (A → B → C)
 
 	// 해제
-	--c;
-	--b;
-	--a;
 }
 int main() {
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
