@@ -20,28 +20,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="circular_ref.cpp" />
-    <ClCompile Include="input test.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="integrity.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BluTransEntry\use_ptr.hpp" />
-    <ClInclude Include="BluTransEntry\BluBooster.hpp" />
-    <ClInclude Include="BluTransEntry\BluBooster_Utils.hpp" />
-    <ClInclude Include="BluTransEntry\CPU.hpp" />
-    <ClInclude Include="BluTransEntry\CPU_Bits.hpp" />
-    <ClInclude Include="BluTransEntry\CPU_Features.hpp" />
-    <ClInclude Include="BluTransEntry\CPU_Sync.hpp" />
-    <ClInclude Include="BluTransEntry\Macros.hpp" />
-    <ClInclude Include="BluTransEntry\Memory.hpp" />
-    <ClInclude Include="BluTransEntry\SharedObjects.hpp" />
-    <ClInclude Include="BluTransEntry\SystemAllocator.hpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

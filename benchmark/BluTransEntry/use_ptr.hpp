@@ -47,7 +47,7 @@ namespace BluBooster::Memory {
 		}
 
 		T* operator->() {
-			if (!isUsing) {
+			if (!isUsing.load(std::memory_order_acquire)) {
 				m_useCount.fetch_add(1, std::memory_order_acq_rel);
 				isUsing = true;
 			}
@@ -57,7 +57,7 @@ namespace BluBooster::Memory {
 			return operator->();
 		}
 		void operator--() {
-			if (isUsing) {
+			if (isUsing.load(std::memory_order_acquire)) {
 				m_useCount.fetch_sub(1, std::memory_order_acq_rel);
 				isUsing = false;
 			}
@@ -80,7 +80,7 @@ namespace BluBooster::Memory {
 	private:
 		T* m_ptr;
 		std::atomic<uint64_t> m_useCount;
-		bool isUsing;
+		std::atomic<bool> isUsing;
 	};
 
 }
