@@ -1,7 +1,7 @@
 # use_ptr (Temp) vs folly::hazptr
 ---
 by EastPlek (Code First Created : 2025. 06. 08 | README First Created : 2025. 06. 10)
-(use_ptr has changed its name to use_ptr at 2025. 06. 12.)
+(AegisPtr has changed its name to use_ptr at 2025. 06. 12.)
 
 ## Use-ref GC (Codename : 허접❤️ GC)란?
 UAF가 발생하기 위해서는 사용이라는 조건이 따라옵니다.
