@@ -107,8 +107,12 @@ use_guard<C> // use_count 1 -> 0
 use_guard<B> // use_count 1 -> 0
 use_guard<A> // use_count 1 -> 0
 use_ptr<C> // c 삭제
+~C
+~A
 use_ptr<B> // b 삭제
+~B
 use_ptr<A> // a 삭제
+~A
 
 또한, 다음과 같이 자기가 자기 자신을 참조하는 코드도 **안전하게** 실행할 수 있습니다.
 ```
@@ -272,8 +276,12 @@ use_guard<C> // use_count 1 -> 0
 use_guard<B> // use_count 1 -> 0
 use_guard<A> // use_count 1 -> 0
 use_ptr<C> // frees c 
+~C
+~A
 use_ptr<B> // frees b
+~B
 use_ptr<A> // frees a
+~A
 
 Additionally, use_ptr can safely execute code that references itself.
 ```
