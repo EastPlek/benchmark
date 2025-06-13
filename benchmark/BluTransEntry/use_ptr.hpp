@@ -2,6 +2,7 @@
 #define USEPTR_HPP
 #include <atomic>
 #include <cstdint>
+#include <unordered_map>
 
 
 namespace UsePtr {
@@ -18,11 +19,7 @@ namespace UsePtr {
 		use_ptr() : m_ptr{ nullptr }, m_useCount{ 0 } {}
 		use_ptr(T*&& ptr) : m_ptr{ ptr}, m_useCount{ 0 } {}
 		~use_ptr() {
-			if (m_useCount.load(std::memory_order_acquire) == 0 && m_ptr)
-			{
-				delete m_ptr;
-				m_ptr = nullptr;
-			}
+			try_clear();
 		}
 
 		use_ptr(const use_ptr<T>& other) = delete;
@@ -32,8 +29,18 @@ namespace UsePtr {
 		}
 		use_ptr&& operator= (use_ptr<T>&& other) = delete;
 
+		bool try_clear() {
+			if (m_useCount.load(std::memory_order_acquire) == 0 && m_ptr)
+			{
+				delete m_ptr;
+				m_ptr = nullptr;
+				return true;
+			}
+			return false;
+		}
+
 		void claim(ExportHandle<T>& handle) {
-			if (m_ptr != nullptr|| m_useCount.load(std::memory_order_acquire)) return;
+			if (m_ptr != nullptr|| m_useCount.load(std::memory_order_acquire) != 0) return;
 			m_ptr = handle.ptr;
 			m_useCount.store(handle.useCount, std::memory_order_release);
 		}
@@ -60,7 +67,7 @@ namespace UsePtr {
 		}
 		template <typename U>
 		void store(use_ptr<U>& other) {
-			// temporary
+			// temporary safety belt.
 			if(std::is_base_of_v<T,U>){
 				m_useCount.fetch_add(1,std::memory_order_acq_rel);
 			}
@@ -71,6 +78,11 @@ namespace UsePtr {
 		std::atomic<uint64_t> m_useCount;
 	};
 
+	class GuradStorage {
+	public:
+	private:
+		std::unordered_map<void*,
+	};
 	template <typename T>
 	class use_guard {
 	public:
@@ -95,6 +107,7 @@ namespace UsePtr {
 				isUsing = true;
 			}
 		}
+
 		T* operator-> () const {
 			return m_ptr->get();
 		}
@@ -110,8 +123,21 @@ namespace UsePtr {
 				isUsing = false;
 			}
 		}
-		void clear() const {
+		void unuse() const {
 			operator--();
+		}
+
+		void force_use() const {
+			m_ptr->use();
+		}
+		void force_unuse() const {
+			m_ptr->unuse();
+		}
+
+		void try_clear() const {
+			if (m_ptr->try_clear()) {
+				m_ptr = nullptr;
+			}
 		}
 		ExportHandle<T> abandon() {
 			return m_ptr->abandon();
@@ -120,6 +146,15 @@ namespace UsePtr {
 		use_ptr<T>* m_ptr{nullptr};
 		bool isUsing{ false };
 	};
+
+	template <typename T>
+	static use_guard<T>& guard(use_ptr<T>& ptr) {
+		static std::unordered_map<use_ptr<T>&, use_guard<T>> m;
+		if (m.find(ptr) == m.end()) {
+			m[ptr] = use_guard<T>(ptr);
+		}
+		return m[ptr];
+	}
 
 }
 

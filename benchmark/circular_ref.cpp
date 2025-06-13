@@ -7,7 +7,7 @@ struct B; // 먼저 선언
 
 struct A {
 	A(int val) : val{val} {}
-	virtual ~A() { }
+	virtual ~A() { std::cout << "~A" << '\n'; }
 	virtual void say() { std::cout << "A" << '\n'; }
 	int val;
 	use_ptr<B> ptr{};
@@ -15,6 +15,7 @@ struct A {
 
 struct B {
 	B(int val) : val{ val } {}
+	~B() { std::cout << "~B" << '\n'; }
 	void say() { std::cout << "B" << '\n'; }
 	int val;
 	use_ptr<C> ptr{};
@@ -22,7 +23,7 @@ struct B {
 
 struct C : A{
 	C(int val) : A{ val }, val{ val } {}
-	~C() {}
+	~C() { std::cout << "~C" << '\n'; }
 	void say() override { std::cout << "C" << '\n'; }
 	int val;
 	use_ptr<A> ptr{};
